@@ -40,7 +40,7 @@ def _flatten_events(raw: list[dict]) -> list[dict]:
     start_date=datetime(2025, 3, 1),
     schedule="@daily",
     catchup=True,
-    max_active_runs=3,
+    max_active_runs=1,
     default_args={"retries": 2, "retry_delay": timedelta(minutes=5)},
     tags=["ingestion"],
 )
