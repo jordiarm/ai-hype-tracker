@@ -1,0 +1,38 @@
+# Keys and credentials
+keys/
+
+# Terraform
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/.terraform.lock.hcl
+*.tfvars
+*.tfvars.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+.env
+*.egg-info/
+dist/
+build/
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+# Airflow
+airflow/logs/
+airflow/plugins/__pycache__/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
