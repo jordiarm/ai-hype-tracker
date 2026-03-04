@@ -48,13 +48,13 @@ def github_archive_ingestion():
 
     @task()
     def ingest_day(ds: str):
-        """Download 24 hourly files for `ds`, flatten, upload raw JSON + Parquet to GCS."""
+        """Download 24 hourly files for `ds`, flatten, upload raw JSON + per-hour Parquet to GCS."""
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = KEY_PATH
         gcs = storage.Client(project=PROJECT)
         bucket = gcs.bucket(BUCKET)
 
         year, month, day = ds.split("-")
-        all_rows = []
+        total_rows = 0
 
         for hour in range(24):
             url = f"https://data.gharchive.org/{ds}-{hour}.json.gz"
@@ -71,7 +71,7 @@ def github_archive_ingestion():
             raw_blob = bucket.blob(f"raw/{year}/{month}/{day}/{ds}-{hour}.json.gz")
             raw_blob.upload_from_string(raw_bytes, content_type="application/gzip")
 
-            # Parse and flatten
+            # Parse and flatten this hour only
             events = []
             with gzip.open(io.BytesIO(raw_bytes), "rt", encoding="utf-8") as f:
                 for line in f:
@@ -82,29 +82,36 @@ def github_archive_ingestion():
                         except json.JSONDecodeError:
                             pass
 
-            all_rows.extend(_flatten_events(events))
+            rows = _flatten_events(events)
             print(f"Hour {hour}: {len(events)} events")
+            total_rows += len(rows)
 
-        if not all_rows:
+            if not rows:
+                del raw_bytes, events, rows
+                continue
+
+            # Write this hour's Parquet immediately — do not accumulate
+            df = pd.DataFrame(rows)
+            df["created_at"] = pd.to_datetime(df["created_at"], utc=True)
+            df["ingested_at"] = pd.to_datetime(df["ingested_at"], utc=True)
+
+            with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as tmp:
+                tmp_path = tmp.name
+
+            try:
+                df.to_parquet(tmp_path, index=False)
+                parquet_blob = bucket.blob(f"processed/{year}/{month}/{day}/events-{hour:02d}.parquet")
+                parquet_blob.upload_from_filename(tmp_path)
+            finally:
+                os.unlink(tmp_path)
+
+            del df, rows, events, raw_bytes
+
+        if total_rows == 0:
             print("No rows collected for this day.")
             return
 
-        # Write Parquet to GCS
-        df = pd.DataFrame(all_rows)
-        df["created_at"] = pd.to_datetime(df["created_at"], utc=True)
-        df["ingested_at"] = pd.to_datetime(df["ingested_at"], utc=True)
-
-        with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as tmp:
-            tmp_path = tmp.name
-
-        try:
-            df.to_parquet(tmp_path, index=False)
-            parquet_blob = bucket.blob(f"processed/{year}/{month}/{day}/events.parquet")
-            parquet_blob.upload_from_filename(tmp_path)
-        finally:
-            os.unlink(tmp_path)
-
-        print(f"Uploaded {len(all_rows)} rows as Parquet for {ds}")
+        print(f"Uploaded {total_rows} rows as Parquet for {ds}")
 
     @task()
     def load_to_bigquery(ds: str):
@@ -113,7 +120,7 @@ def github_archive_ingestion():
         year, month, day = ds.split("-")
         bq = bigquery.Client(project=PROJECT)
 
-        uri = f"gs://{BUCKET}/processed/{year}/{month}/{day}/events.parquet"
+        uri = f"gs://{BUCKET}/processed/{year}/{month}/{day}/events-*.parquet"
         table_ref = f"{PROJECT}.{BQ_DATASET}.{BQ_TABLE}"
 
         job_config = bigquery.LoadJobConfig(
