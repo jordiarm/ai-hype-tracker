@@ -29,7 +29,7 @@ variable "delete_contents_on_destroy" {
 
 variable "credentials" {
     description = "My credentials"
-    default = "/Users/jordiarmentia/ai_hype_tracker/keys/terraform.json"
+    default = "keys/terraform.json"
 }
 
 variable "vm_name" {
