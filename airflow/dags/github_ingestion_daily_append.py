@@ -99,7 +99,7 @@ def github_archive_ingestion():
                 tmp_path = tmp.name
 
             try:
-                df.to_parquet(tmp_path, index=False)
+                df.to_parquet(tmp_path, index=False, coerce_timestamps="us", allow_truncated_timestamps=True)
                 parquet_blob = bucket.blob(f"processed/{year}/{month}/{day}/events-{hour:02d}.parquet")
                 parquet_blob.upload_from_filename(tmp_path)
             finally:
