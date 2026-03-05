@@ -11,4 +11,5 @@ with push_events as (
     where event_type = 'PushEvent'
 
 )
+
 select * from push_events

@@ -22,13 +22,16 @@ jobs:
   sql-lint:
     name: SQL Lint
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dbt
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
       - run: pip install sqlfluff sqlfluff-templater-dbt dbt-bigquery
-      - run: sqlfluff lint dbt/models/
+      - run: sqlfluff lint models/
 
   terraform-validate:
     name: Terraform Validate

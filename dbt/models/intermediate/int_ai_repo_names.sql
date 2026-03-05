@@ -25,16 +25,17 @@ keyword_repos as (
 
     select repo_name
     from events
-    where lower(repo_name) like '%llm%'
-       or lower(repo_name) like '%gpt%'
-       or lower(repo_name) like '%ai%'
-       or lower(repo_name) like '%ml%'
-       or lower(repo_name) like '%neural%'
-       or lower(repo_name) like '%diffusion%'
-       or lower(repo_name) like '%langchain%'
-       or lower(repo_name) like '%ollama%'
-       or lower(repo_name) like '%embedding%'
-       or lower(repo_name) like '%transformer%'
+    where
+        lower(repo_name) like '%llm%'
+        or lower(repo_name) like '%gpt%'
+        or lower(repo_name) like '%ai%'
+        or lower(repo_name) like '%ml%'
+        or lower(repo_name) like '%neural%'
+        or lower(repo_name) like '%diffusion%'
+        or lower(repo_name) like '%langchain%'
+        or lower(repo_name) like '%ollama%'
+        or lower(repo_name) like '%embedding%'
+        or lower(repo_name) like '%transformer%'
 
 ),
 

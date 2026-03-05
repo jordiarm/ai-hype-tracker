@@ -17,7 +17,7 @@ select
 from {{ ref('fct_ai_repo_events') }}
 
 {% if is_incremental() %}
-where date(created_at) > (select max(event_date) from {{ this }})
+    where date(created_at) > (select max(event_date) from {{ this }})
 {% endif %}
 
 group by event_date, event_month, event_year, repo_name, event_type

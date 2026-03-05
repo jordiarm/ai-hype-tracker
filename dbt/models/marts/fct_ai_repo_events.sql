@@ -16,5 +16,5 @@ select
 from {{ ref('int_ai_events') }}
 
 {% if is_incremental() %}
-where ingested_at > (select max(ingested_at) from {{ this }})
+    where ingested_at > (select max(ingested_at) from {{ this }})
 {% endif %}

@@ -17,6 +17,6 @@ select
     e.repo_name,
     e.created_at,
     e.ingested_at
-from events e
-inner join ai_repo_names r
+from events as e
+inner join ai_repo_names as r
     on e.repo_name = r.repo_name
