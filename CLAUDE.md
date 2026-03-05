@@ -63,6 +63,8 @@ ai_hype_tracker/
 ├── terraform/
 │   ├── main.tf
 │   └── variables.tf
+├── .pre-commit-config.yaml                    # Pre-commit hooks (ruff, sqlfluff, terraform fmt)
+├── .gitignore
 ├── Makefile                                   # Dev/deploy automation targets
 ├── docs/
 └── README.md
@@ -156,20 +158,38 @@ Common development commands via `make`:
 | Target | Description |
 |---|---|
 | `lint` | Runs `lint-python`, `lint-sql`, `lint-terraform` |
-| `dbt-build` | `dbt build` in `dbt/` directory |
+| `dbt-build` | `dbt deps` + `dbt build` in `dbt/` directory |
 | `dbt-run`, `dbt-test`, `dbt-docs` | Individual dbt commands |
+| `dbt-clean` | `dbt clean` in `dbt/` directory |
 | `deploy-dag` | SCP DAG to VM via IAP |
-| `deploy` | Full deploy (DAG + key to VM) |
+| `deploy-key` | SCP service account key to VM via IAP |
+| `deploy` | Full deploy (`deploy-dag` + `deploy-key`) |
 | `ssh` | SSH into `airflow-vm` via IAP |
+| `terraform-plan` | `terraform plan` |
+| `terraform-destroy` | `terraform destroy` |
 | `infra` | `terraform-init` + `terraform-apply` |
+| `setup` | `infra` + `dbt-deps` + `setup-hooks` |
+| `setup-hooks` | `pre-commit install` |
 | `ci` | `lint` + `dbt-build` (local CI check) |
+
+## Pre-commit Hooks
+
+Config at `.pre-commit-config.yaml`. Runs on `git commit`:
+
+- **ruff** (v0.11.4) — lints `airflow/` Python files
+- **sqlfluff-lint** (v3.3.1) — lints `dbt/models/` SQL files (uses `dbt/.sqlfluff` config)
+- **terraform_fmt** (v1.97.0) — formats Terraform files
+
+Install with `make setup-hooks` or `pre-commit install`.
 
 ## SQLFluff Configuration
 
 Config at `dbt/.sqlfluff`:
-- Dialect: BigQuery, templater: dbt
+
+- Dialect: BigQuery, templater: jinja
 - Max line length: 120, indent: 4 spaces
 - Keywords and functions: lowercase
+- Excluded rules: `ST06` (select wildcards), `RF02` (qualified references)
 
 ## Infrastructure Notes
 

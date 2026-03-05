@@ -18,6 +18,8 @@ Batch data pipeline that tracks all GitHub event activity on AI repositories ove
 | Transformation | dbt | Business logic, filtering, modeling |
 | Dashboard | Looker Studio | Native BigQuery connector |
 | Cloud Provider | GCP | Region: `europe-west4` |
+| CI/CD | GitHub Actions | Lint + dbt build on push/PR |
+| Linting | ruff, sqlfluff, terraform fmt | Python, SQL, Terraform |
 
 ---
 
@@ -327,13 +329,19 @@ A `Makefile` wraps common commands for convenience:
 | Command | Description |
 |---|---|
 | `make terraform-init` | Initialize Terraform |
+| `make terraform-plan` | Plan Terraform changes |
 | `make terraform-apply` | Provision GCP infrastructure |
+| `make terraform-destroy` | Destroy GCP infrastructure |
 | `make dbt-build` | Install dbt packages, run models + tests |
 | `make dbt-test` | Run dbt tests only |
+| `make dbt-clean` | Clean dbt artifacts |
 | `make dbt-docs` | Generate and serve dbt documentation |
 | `make ssh` | SSH into the Airflow VM via IAP |
-| `make deploy` | Copy DAG + service account key to the VM |
-| `make setup` | Full initial setup (infra + dbt deps) |
+| `make deploy-dag` | Copy DAG to the VM |
+| `make deploy-key` | Copy service account key to the VM |
+| `make deploy` | Full deploy (DAG + key) |
+| `make setup` | Full initial setup (infra + dbt deps + hooks) |
+| `make setup-hooks` | Install pre-commit hooks |
 | `make lint` | Run all linters (Python, SQL, Terraform) |
 | `make ci` | Run linters + dbt build |
 
@@ -368,6 +376,20 @@ base64 -i /path/to/your/service-account-key.json | pbcopy
 ```
 
 The service account needs at minimum: `roles/bigquery.dataEditor` and `roles/bigquery.jobUser`.
+
+---
+
+## Pre-commit Hooks
+
+The project uses [pre-commit](https://pre-commit.com/) to run linters on every commit:
+
+| Hook | Version | Scope |
+| --- | --- | --- |
+| [ruff](https://docs.astral.sh/ruff/) | v0.11.4 | `airflow/` Python files |
+| [sqlfluff](https://sqlfluff.com/) | v3.3.1 | `dbt/models/` SQL files |
+| [terraform_fmt](https://github.com/antonbabenko/pre-commit-terraform) | v1.97.0 | Terraform files |
+
+Install with `make setup-hooks` or `pre-commit install`.
 
 ---
 
