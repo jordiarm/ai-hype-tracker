@@ -44,9 +44,15 @@ ai_hype_tracker/
 │   │   ├── intermediate/
 │   │   │   ├── int_star_events.sql            # Filters WatchEvent only
 │   │   │   ├── int_ai_repo_names.sql          # AI repo identification (keywords + curated list)
-│   │   │   ├── int_ai_star_events.sql         # Star events filtered to AI repos only
+│   │   │   ├── int_ai_star_events.sql         # Joins int_star_events × int_ai_repo_names
 │   │   │   └── schema.yml                     # Model documentation & tests
-│   │   └── marts/                             # Planned: fct_ai_repo_stars, agg_stars_by_month
+│   │   └── marts/
+│   │       ├── dim_ai_repos.sql               # Distinct AI repo names
+│   │       ├── fct_ai_repo_events.sql         # Incremental fact table of AI star events
+│   │       ├── schema.yml                     # Model documentation & tests
+│   │       └── reporting/
+│   │           ├── fct_daily_ai_repo_events.sql  # Daily aggregation by repo + event type
+│   │           └── schema.yml
 │   ├── dbt_project.yml
 │   └── dbt_packages.yml
 ├── terraform/
@@ -93,9 +99,17 @@ ai_hype_tracker/
 | Staging | `stg_github_event_data` | Implemented — cleans raw events, casts types, filters null IDs |
 | Intermediate | `int_star_events` | Implemented — filters to `WatchEvent` only |
 | Intermediate | `int_ai_repo_names` | Implemented — identifies AI repos via keywords + curated list |
-| Intermediate | `int_ai_star_events` | Implemented — star events joined to AI repos (combines star + AI filtering) |
-| Marts | `fct_ai_repo_stars` | Not yet implemented |
-| Marts | `agg_stars_by_month` | Not yet implemented |
+| Intermediate | `int_ai_star_events` | Implemented — joins `int_star_events` × `int_ai_repo_names` |
+| Marts | `dim_ai_repos` | Implemented — distinct AI repo names from `int_ai_repo_names` |
+| Marts | `fct_ai_repo_events` | Implemented — incremental fact table from `int_ai_star_events` |
+| Reporting | `fct_daily_ai_repo_events` | Implemented — daily aggregation by repo + event type |
+
+### dbt DAG
+
+```text
+stg_github_event_data ─→ int_star_events ────→ int_ai_star_events ─→ fct_ai_repo_events ─→ fct_daily_ai_repo_events
+                       └→ int_ai_repo_names ─┘                      dim_ai_repos ←────────┘
+```
 
 ## AI Repo Identification (done in dbt, NOT in Airflow)
 
@@ -105,7 +119,7 @@ Airflow ingests all events raw. Filtering happens exclusively in dbt intermediat
 `llm`, `gpt`, `ai`, `ml`, `neural`, `diffusion`, `langchain`, `ollama`, `embedding`, `transformer`
 
 **Curated list** (always included):
-`huggingface/transformers`, `langchain-ai/langchain`, `openai/openai-python`, `ollama/ollama`, `pytorch/pytorch`, `tensorflow/tensorflow`, `microsoft/autogen`, `ggerganov/llama.cpp`, `comfyanonymous/ComfyUI`, `nomic-ai/gpt4all`, plus several others.
+`huggingface/transformers`, `langchain-ai/langchain`, `openai/openai-python`, `ollama/ollama`, `pytorch/pytorch`, `tensorflow/tensorflow`, `microsoft/autogen`, `ggerganov/llama.cpp`, `comfyanonymous/comfyui`, `nomic-ai/gpt4all`, plus several others. (All lowercased to match staging layer.)
 
 ## Key Design Decisions
 

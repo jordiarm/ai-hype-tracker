@@ -1,0 +1,37 @@
+models:
+  - name: dim_ai_repos
+    description: "Dimension table listing distinct AI-related repositories identified in the intermediate layer."
+    columns:
+      - name: repo_name
+        description: "The name of the GitHub repository identified as AI-related."
+        tests:
+          - unique
+          - not_null
+  - name: fct_ai_repo_events
+    description: "Fact table containing GitHub events for AI-related repositories, including details about the actor, repository, and timestamps."
+    columns:
+      - name: event_id
+        description: "A unique identifier for each GitHub star event."
+        tests:
+          - unique
+          - not_null
+      - name: actor_login
+        description: "The GitHub username of the actor who starred the repository."
+        tests:
+          - not_null
+      - name: repo_name
+        description: "The name of the AI-related GitHub repository that was starred."
+        tests:
+          - not_null
+      - name: created_at
+        description: "The timestamp when the star event was created."
+        tests:
+            - not_null
+      - name: ingested_at
+        description: "The timestamp when the data was ingested into the staging layer."
+        tests:
+          - not_null
+      - name: event_type
+        description: "The type of GitHub event (e.g., PushEvent, PullRequestEvent)."
+        tests:
+          - not_null

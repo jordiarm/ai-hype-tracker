@@ -15,7 +15,7 @@ curated_repos as (
         'tensorflow/tensorflow',
         'microsoft/autogen',
         'ggerganov/llama.cpp',
-        'comfyanonymous/ComfyUI',
+        'comfyanonymous/comfyui',
         'nomic-ai/gpt4all'
     )
 

@@ -1,0 +1,24 @@
+models:
+  - name: fct_daily_ai_repo_events
+    description: "Fact table containing daily counts of GitHub events for AI-related repositories, aggregated by repository, event type, and date."
+    columns:
+      - name: event_date
+        description: "The date (without time) when the events occurred."
+        tests:
+          - not_null
+      - name: repo_name
+        description: "The name of the AI-related GitHub repository."
+        tests:
+          - not_null
+      - name: event_type
+        description: "The type of GitHub event (e.g., WatchEvent, PushEvent)."
+        tests:
+          - not_null
+      - name: event_count
+        description: "The total number of events for the repository on the given date."
+        tests:
+          - not_null
+      - name: unique_actors
+        description: "The number of unique GitHub users who triggered events on the given date."
+        tests:
+          - not_null
