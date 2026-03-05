@@ -1,0 +1,21 @@
+[sqlfluff]
+templater = dbt
+dialect = bigquery
+max_line_length = 120
+large_file_skip_byte_limit = 0
+
+[sqlfluff:indentation]
+indent_unit = space
+tab_space_size = 4
+
+[sqlfluff:templater:dbt]
+project_dir = .
+profiles_dir = .
+profile = ai_hype_tracker
+target = ci
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.functions]
+extended_capitalisation_policy = lower

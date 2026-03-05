@@ -8,6 +8,9 @@ terraform/terraform.tfstate.backup
 terraform/.terraform.lock.hcl
 *.tfvars
 *.tfvars.json
+*.tfplan
+crash.log
+crash.*.log
 
 # Python
 __pycache__/
@@ -20,16 +23,22 @@ env/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # dbt
 dbt/target/
 dbt/dbt_packages/
 dbt/dbt_internal_packages/
 dbt/logs/
+dbt/.user.yml
 
 # Airflow
 airflow/logs/
 airflow/plugins/__pycache__/
+airflow.db
+airflow-webserver.pid
 
 # macOS
 .DS_Store
@@ -37,3 +46,6 @@ airflow/plugins/__pycache__/
 # IDE
 **/.vscode/
 .idea/
+
+# Claude Code
+.claude/

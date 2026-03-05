@@ -16,6 +16,8 @@ Batch data pipeline that tracks all GitHub event activity on AI repositories ove
 | Transformation | dbt | Business logic, filtering, modeling |
 | Dashboard | Looker Studio | Native BigQuery connector |
 | Cloud Provider | GCP | Region: `europe-west4`, Location: `EU` |
+| CI/CD | GitHub Actions | Lint + dbt build on push/PR |
+| Linting | ruff, sqlfluff, terraform fmt | Python, SQL, Terraform |
 
 ## GCP Resources
 
@@ -31,11 +33,14 @@ Batch data pipeline that tracks all GitHub event activity on AI repositories ove
 
 ```
 ai_hype_tracker/
+├── .github/workflows/
+│   └── ci.yml                                 # GitHub Actions CI pipeline
 ├── airflow/
 │   ├── dags/
 │   │   └── github_ingestion_daily_append.py   # Main ingestion DAG
 │   └── keys/                                   # Service account keys (gitignored)
 ├── dbt/
+│   ├── .sqlfluff                              # SQLFluff linting config
 │   ├── models/
 │   │   ├── staging/
 │   │   │   ├── stg_github_event_data.sql      # Cleans raw events, casts types
@@ -58,6 +63,7 @@ ai_hype_tracker/
 ├── terraform/
 │   ├── main.tf
 │   └── variables.tf
+├── Makefile                                   # Dev/deploy automation targets
 ├── docs/
 └── README.md
 ```
@@ -130,6 +136,40 @@ Airflow ingests all events raw. Filtering happens exclusively in dbt intermediat
 - **Self-hosted Airflow on GCE** — Cloud Composer is too expensive for a personal project
 - **All event types tracked** — stars, pushes, PRs, issues, etc. give a fuller picture of developer engagement
 - **Always filter on `created_at`** in BigQuery queries to use partitioning and control costs
+
+## CI/CD (GitHub Actions)
+
+Workflow at `.github/workflows/ci.yml`, triggered on push and PR to `main`.
+
+**Jobs:**
+1. **python-lint** — `ruff check` on `airflow/` code
+2. **sql-lint** — `sqlfluff lint` on dbt models (BigQuery dialect)
+3. **terraform-validate** — `terraform fmt -check` + `terraform validate`
+4. **dbt-build-test** — `dbt deps` + `dbt build` against BigQuery (uses `ci` target)
+
+**Required secret:** `GCP_SA_KEY` — base64-encoded GCP service account JSON key
+
+## Makefile
+
+Common development commands via `make`:
+
+| Target | Description |
+|---|---|
+| `lint` | Runs `lint-python`, `lint-sql`, `lint-terraform` |
+| `dbt-build` | `dbt build` in `dbt/` directory |
+| `dbt-run`, `dbt-test`, `dbt-docs` | Individual dbt commands |
+| `deploy-dag` | SCP DAG to VM via IAP |
+| `deploy` | Full deploy (DAG + key to VM) |
+| `ssh` | SSH into `airflow-vm` via IAP |
+| `infra` | `terraform-init` + `terraform-apply` |
+| `ci` | `lint` + `dbt-build` (local CI check) |
+
+## SQLFluff Configuration
+
+Config at `dbt/.sqlfluff`:
+- Dialect: BigQuery, templater: dbt
+- Max line length: 120, indent: 4 spaces
+- Keywords and functions: lowercase
 
 ## Infrastructure Notes
 

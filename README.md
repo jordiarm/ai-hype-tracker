@@ -156,6 +156,221 @@ stg_github_event_data ─→ int_ai_events ─→ fct_ai_repo_events ─→ fct_
 
 ---
 
+## How to Reproduce
+
+### Prerequisites
+
+- A [Google Cloud Platform](https://cloud.google.com/) account with billing enabled
+- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.0
+- [gcloud CLI](https://cloud.google.com/sdk/docs/install) installed and authenticated
+- Python 3.10+
+- [dbt-core](https://docs.getdbt.com/docs/core/installation) and `dbt-bigquery`
+
+### 1. GCP Project Setup
+
+```bash
+# Create a GCP project (or use an existing one)
+gcloud projects create ai-hype-tracker --name="AI Hype Tracker"
+gcloud config set project ai-hype-tracker
+
+# Enable required APIs
+gcloud services enable compute.googleapis.com
+gcloud services enable bigquery.googleapis.com
+gcloud services enable storage.googleapis.com
+
+# Create a service account for Terraform
+gcloud iam service-accounts create terraform \
+  --display-name="Terraform"
+
+# Grant Editor role (or use scoped roles: Storage Admin, BigQuery Admin, Compute Admin)
+gcloud projects add-iam-policy-binding ai-hype-tracker \
+  --member="serviceAccount:terraform@ai-hype-tracker.iam.gserviceaccount.com" \
+  --role="roles/editor"
+
+# Download the key
+gcloud iam service-accounts keys create terraform/keys/terraform.json \
+  --iam-account=terraform@ai-hype-tracker.iam.gserviceaccount.com
+
+# Create a service account for Airflow (needs GCS + BigQuery access)
+gcloud iam service-accounts create airflow \
+  --display-name="Airflow"
+
+gcloud projects add-iam-policy-binding ai-hype-tracker \
+  --member="serviceAccount:airflow@ai-hype-tracker.iam.gserviceaccount.com" \
+  --role="roles/storage.objectAdmin"
+
+gcloud projects add-iam-policy-binding ai-hype-tracker \
+  --member="serviceAccount:airflow@ai-hype-tracker.iam.gserviceaccount.com" \
+  --role="roles/bigquery.dataEditor"
+
+gcloud projects add-iam-policy-binding ai-hype-tracker \
+  --member="serviceAccount:airflow@ai-hype-tracker.iam.gserviceaccount.com" \
+  --role="roles/bigquery.jobUser"
+
+# Download the Airflow key
+gcloud iam service-accounts keys create airflow_service_account.json \
+  --iam-account=airflow@ai-hype-tracker.iam.gserviceaccount.com
+```
+
+### 2. Provision Infrastructure with Terraform
+
+```bash
+cd terraform
+terraform init
+terraform plan
+terraform apply
+```
+
+This creates:
+
+- **GCS bucket** (`ai_hype_tracker_bucket`) — data lake for raw JSON and Parquet files
+- **BigQuery dataset** (`ai_hype_tracker`) — data warehouse
+- **GCE VM** (`airflow-vm`) — e2-medium running Ubuntu 22.04 with Airflow pre-installed
+- **Firewall rule** — SSH via IAP only (secure access)
+
+### 3. Deploy Airflow on the VM
+
+```bash
+# SSH into the VM via IAP
+gcloud compute ssh airflow-vm --zone europe-west4-a --tunnel-through-iap
+
+# The Terraform startup script already installed Airflow at /opt/airflow
+# Activate the virtualenv
+source /opt/airflow/bin/activate
+
+# Install Python dependencies for the DAG
+pip install pandas requests google-cloud-storage google-cloud-bigquery
+
+# Create directories for the DAG and keys
+mkdir -p ~/airflow/keys
+mkdir -p /opt/airflow/dags
+```
+
+Copy files from your local machine to the VM (run from your local machine):
+
+```bash
+# Copy the DAG
+gcloud compute scp airflow/dags/github_ingestion_daily_append.py \
+  airflow-vm:/opt/airflow/dags/ \
+  --zone europe-west4-a --tunnel-through-iap
+
+# Copy the Airflow service account key
+gcloud compute scp airflow_service_account.json \
+  airflow-vm:~/airflow/keys/airflow_service_account.json \
+  --zone europe-west4-a --tunnel-through-iap
+```
+
+Start Airflow (back on the VM):
+
+```bash
+source /opt/airflow/bin/activate
+export AIRFLOW_HOME=/opt/airflow
+
+# Create an admin user
+airflow users create \
+  --username admin --password admin \
+  --firstname Admin --lastname User \
+  --role Admin --email admin@example.com
+
+# Start webserver and scheduler (in separate terminals or using nohup)
+airflow webserver -p 8080 &
+airflow scheduler &
+```
+
+The DAG `github_ingestion_daily_append` will appear in the Airflow UI. It backfills automatically from 2025-03-01 once unpaused.
+
+### 4. Run dbt Transformations
+
+```bash
+# Install dbt (locally, not on the VM)
+pip install dbt-core dbt-bigquery
+
+# Create a dbt profile at ~/.dbt/profiles.yml
+mkdir -p ~/.dbt
+cat > ~/.dbt/profiles.yml << 'EOF'
+ai_hype_tracker:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: service-account
+      project: ai-hype-tracker
+      dataset: ai_hype_tracker
+      location: EU
+      keyfile: /absolute/path/to/your/service-account-key.json  # update this path
+      threads: 4
+EOF
+
+# Install dbt packages and run all models + tests
+cd dbt
+dbt deps
+dbt build
+```
+
+This creates the full model chain: staging views → intermediate views → mart tables → reporting incremental tables.
+
+### 5. Build the Dashboard
+
+1. Open [Looker Studio](https://lookerstudio.google.com/)
+2. Create a new report and add a **BigQuery** data source
+3. Select project `ai-hype-tracker` → dataset `ai_hype_tracker` → table `fct_daily_ai_repo_events`
+4. Create at least two tiles:
+   - **Bar chart** — event count by `event_type` (categorical distribution)
+   - **Time series** — total events per `event_month` (temporal trend)
+
+---
+
+## Makefile
+
+A `Makefile` wraps common commands for convenience:
+
+| Command | Description |
+|---|---|
+| `make terraform-init` | Initialize Terraform |
+| `make terraform-apply` | Provision GCP infrastructure |
+| `make dbt-build` | Install dbt packages, run models + tests |
+| `make dbt-test` | Run dbt tests only |
+| `make dbt-docs` | Generate and serve dbt documentation |
+| `make ssh` | SSH into the Airflow VM via IAP |
+| `make deploy` | Copy DAG + service account key to the VM |
+| `make setup` | Full initial setup (infra + dbt deps) |
+| `make lint` | Run all linters (Python, SQL, Terraform) |
+| `make ci` | Run linters + dbt build |
+
+Run `make` followed by any target name. See the [Makefile](Makefile) for all available targets.
+
+---
+
+## CI/CD
+
+A GitHub Actions workflow ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs on every push and PR to `main`:
+
+| Job | What it does |
+|---|---|
+| **Python Lint** | Checks Airflow DAG code with [ruff](https://docs.astral.sh/ruff/) |
+| **SQL Lint** | Lints dbt models with [sqlfluff](https://sqlfluff.com/) (BigQuery dialect) |
+| **Terraform Validate** | Runs `terraform fmt -check` and `terraform validate` |
+| **dbt Build & Test** | Installs dbt packages, runs all models and tests against BigQuery |
+
+### Setup: Add GCP credentials as a GitHub secret
+
+The `dbt-build` job needs a GCP service account key to connect to BigQuery.
+
+```bash
+# Base64-encode your service account key
+base64 -i /path/to/your/service-account-key.json | pbcopy
+
+# Then in GitHub:
+# 1. Go to your repo → Settings → Secrets and variables → Actions
+# 2. Click "New repository secret"
+# 3. Name: GCP_SA_KEY
+# 4. Value: paste the base64-encoded key
+```
+
+The service account needs at minimum: `roles/bigquery.dataEditor` and `roles/bigquery.jobUser`.
+
+---
+
 ## Timeframe
 
 - **Start:** March 1, 2025
