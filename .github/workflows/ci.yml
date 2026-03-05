@@ -87,3 +87,29 @@ jobs:
 
       - run: dbt deps
       - run: dbt build
+
+  deploy-dag:
+    name: Deploy DAG
+    needs: [python-lint, sql-lint, terraform-validate, dbt-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Authenticate to GCP
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          echo "$GCP_SA_KEY" | base64 -d > /tmp/gcp_key.json
+          gcloud auth activate-service-account --key-file=/tmp/gcp_key.json
+          gcloud config set project ai-hype-tracker
+
+      - name: Deploy DAG to Airflow VM
+        run: |
+          gcloud compute scp airflow/dags/github_ingestion_daily_append.py \
+            airflow-vm:/opt/airflow/dags/ \
+            --zone europe-west4-a \
+            --tunnel-through-iap \
+            --quiet
