@@ -68,7 +68,6 @@ ci: lint dbt-build
 
 # ─── Hooks ───────────────────────────────────────────────────────────────────
 setup-hooks:
-	pip3 install pre-commit
 	pre-commit install
 
 # ─── Composite ────────────────────────────────────────────────────────────────
