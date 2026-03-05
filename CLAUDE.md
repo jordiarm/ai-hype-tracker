@@ -38,10 +38,14 @@ ai_hype_tracker/
 ├── dbt/
 │   ├── models/
 │   │   ├── staging/
-│   │   │   ├── stg_github_repo_data.sql       # Cleans raw events, casts types
+│   │   │   ├── stg_github_event_data.sql      # Cleans raw events, casts types
 │   │   │   ├── schema.yml                     # Model documentation & tests
 │   │   │   └── sources.yml                    # Source definitions (BigQuery)
-│   │   ├── intermediate/                      # Planned: int_star_events, int_ai_repos
+│   │   ├── intermediate/
+│   │   │   ├── int_star_events.sql            # Filters WatchEvent only
+│   │   │   ├── int_ai_repo_names.sql          # AI repo identification (keywords + curated list)
+│   │   │   ├── int_ai_star_events.sql         # Star events filtered to AI repos only
+│   │   │   └── schema.yml                     # Model documentation & tests
 │   │   └── marts/                             # Planned: fct_ai_repo_stars, agg_stars_by_month
 │   ├── dbt_project.yml
 │   └── dbt_packages.yml
@@ -80,26 +84,27 @@ ai_hype_tracker/
 - **Profile:** `ai_hype_tracker`
 - **Materializations:** staging → view, intermediate → view, marts → table
 - **Packages:** `dbt-labs/dbt_utils` 1.3.3
-- **Source:** `raw.raw_github_repos` (defined in `sources.yml`, references BigQuery dataset `ai_hype_tracker`)
+- **Source:** `raw.raw_github_events` (defined in `sources.yml`, references BigQuery dataset `ai_hype_tracker`)
 
 ### Current dbt model status
 
 | Layer | Model | Status |
 | --- | --- | --- |
-| Staging | `stg_github_repo_data` | Implemented — cleans raw events, casts types, filters null IDs |
-| Intermediate | `int_star_events` | Not yet implemented |
-| Intermediate | `int_ai_repos` | Not yet implemented |
+| Staging | `stg_github_event_data` | Implemented — cleans raw events, casts types, filters null IDs |
+| Intermediate | `int_star_events` | Implemented — filters to `WatchEvent` only |
+| Intermediate | `int_ai_repo_names` | Implemented — identifies AI repos via keywords + curated list |
+| Intermediate | `int_ai_star_events` | Implemented — star events joined to AI repos (combines star + AI filtering) |
 | Marts | `fct_ai_repo_stars` | Not yet implemented |
 | Marts | `agg_stars_by_month` | Not yet implemented |
 
-## AI Repo Identification (planned for dbt, NOT in Airflow)
+## AI Repo Identification (done in dbt, NOT in Airflow)
 
-Airflow ingests all events raw. Filtering will happen exclusively in dbt intermediate/marts layers (not yet implemented).
+Airflow ingests all events raw. Filtering happens exclusively in dbt intermediate layer (`int_ai_repo_names` + `int_ai_star_events`).
 
-**Keyword filter** (to be applied to `repo_name`):
+**Keyword filter** (applied to `repo_name` in `int_ai_repo_names`):
 `llm`, `gpt`, `ai`, `ml`, `neural`, `diffusion`, `langchain`, `ollama`, `embedding`, `transformer`
 
-**Curated list** (to be always included):
+**Curated list** (always included):
 `huggingface/transformers`, `langchain-ai/langchain`, `openai/openai-python`, `ollama/ollama`, `pytorch/pytorch`, `tensorflow/tensorflow`, `microsoft/autogen`, `ggerganov/llama.cpp`, `comfyanonymous/ComfyUI`, `nomic-ai/gpt4all`, plus several others.
 
 ## Key Design Decisions

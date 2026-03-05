@@ -1,0 +1,93 @@
+models:
+  - name: int_ai_star_events
+    description: "Intermediate model that filters GitHub events to include only 'WatchEvent' types, which indicate when a user stars a repository, and further filters to include only those events associated with AI-related repositories."
+    columns:
+      - name: event_id
+        description: "A unique identifier for each GitHub event."
+        tests:
+          - unique
+          - not_null
+      - name: event_type
+        description: "The type of GitHub event (e.g., PushEvent, PullRequestEvent)."
+        tests:
+          - not_null
+      - name: actor_login
+        description: "The GitHub username of the actor who triggered the event."
+        tests:
+          - not_null
+      - name: repo_name
+        description: "The name of the GitHub repository associated with the event."
+        tests:
+          - not_null
+      - name: created_at
+        description: "The timestamp when the GitHub event was created."
+        tests:
+            - not_null
+      - name: ingested_at
+        description: "The timestamp when the data was ingested into the staging layer."
+        tests:
+          - not_null
+  - name: int_star_events
+    description: "Intermediate model that filters GitHub events to include only 'WatchEvent' types, which indicate when a user stars a repository."
+    columns:
+      - name: event_id
+        description: "A unique identifier for each GitHub event."
+        tests:
+          - unique
+          - not_null
+      - name: event_type
+        description: "The type of GitHub event (e.g., PushEvent, PullRequestEvent)."
+        tests:
+          - not_null
+      - name: actor_login
+        description: "The GitHub username of the actor who triggered the event."
+        tests:
+          - not_null
+      - name: repo_name
+        description: "The name of the GitHub repository associated with the event."
+        tests:
+          - not_null
+      - name: created_at
+        description: "The timestamp when the GitHub event was created."
+        tests:
+            - not_null
+      - name: ingested_at
+        description: "The timestamp when the data was ingested into the staging layer."
+        tests:
+          - not_null
+  - name: int_ai_repo_names
+    description: "Intermediate model that identifies AI-related repositories based on the presence of keywords in the repository name."
+    columns:
+      - name: repo_name
+        description: "The name of the GitHub repository associated with the event."
+        tests:
+          - unique
+          - not_null
+  - name: int_push_events
+    description: "Intermediate model that filters GitHub events to include only 'PushEvent' types, which indicate when a user pushes code to a repository."
+    columns:
+      - name: event_id
+        description: "A unique identifier for each GitHub event."
+        tests:
+          - unique
+          - not_null
+      - name: event_type
+        description: "The type of GitHub event (e.g., PushEvent, PullRequestEvent)."
+        tests:
+          - not_null
+      - name: actor_login
+        description: "The GitHub username of the actor who triggered the event."
+        tests:
+          - not_null
+      - name: repo_name
+        description: "The name of the GitHub repository associated with the event."
+        tests:
+          - not_null
+      - name: created_at
+        description: "The timestamp when the GitHub event was created."
+        tests:
+            - not_null
+      - name: ingested_at
+        description: "The timestamp when the data was ingested into the staging layer."
+        tests:
+          - not_null

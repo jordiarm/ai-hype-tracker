@@ -1,7 +1,7 @@
 sources:
   - name: raw
     description: "Raw data from the BigQuery public datasets"
-    database: env_var('GCP_PROJECT_ID', 'ai-hype-tracker')
+    database: "{{ env_var('GCP_PROJECT_ID', 'ai-hype-tracker') }}"
     schema: ai_hype_tracker
     tables:
       - name: raw_github_events
