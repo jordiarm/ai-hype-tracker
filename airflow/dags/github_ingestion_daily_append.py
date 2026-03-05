@@ -18,7 +18,6 @@ BQ_DATASET = "ai_hype_tracker"
 BQ_TABLE = "raw_github_events"
 KEY_PATH = "/home/jordiarmentia/airflow/keys/airflow_service_account.json"
 
-### Ingestion DAG
 
 
 @dag(
