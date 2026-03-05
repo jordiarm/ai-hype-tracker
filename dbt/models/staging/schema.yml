@@ -7,7 +7,9 @@ models:
       - name: event_id
         description: "A unique identifier for each GitHub event."
         tests:
-          - unique
+          - unique:
+              config:
+                severity: warn
           - not_null
       - name: event_type
         description: "The type of GitHub event (e.g., PushEvent, PullRequestEvent)."

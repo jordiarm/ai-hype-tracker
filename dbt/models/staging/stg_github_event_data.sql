@@ -15,6 +15,7 @@ cleaned as (
         cast(ingested_at as timestamp) as ingested_at
     from source
     where event_id is not null
+        and repo_name is not null
 
 )
 
