@@ -44,6 +44,7 @@ ai_hype_tracker/
 │   │   ├── intermediate/
 │   │   │   ├── int_ai_repo_names.sql          # AI repo identification (keywords + curated list)
 │   │   │   ├── int_ai_events.sql              # Joins stg_github_event_data × int_ai_repo_names
+│   │   │   ├── int_push_events.sql            # Filters stg events for PushEvent only
 │   │   │   └── schema.yml                     # Model documentation & tests
 │   │   └── marts/
 │   │       ├── dim_ai_repos.sql               # Distinct AI repo names
@@ -87,7 +88,7 @@ ai_hype_tracker/
 ## dbt Configuration
 
 - **Profile:** `ai_hype_tracker`
-- **Materializations:** staging → view, intermediate → view, marts → table
+- **Materializations:** staging → view, intermediate → view, marts → table (reporting uses incremental)
 - **Packages:** `dbt-labs/dbt_utils` 1.3.3
 - **Source:** `raw.raw_github_events` (defined in `sources.yml`, references BigQuery dataset `ai_hype_tracker`)
 
@@ -98,15 +99,17 @@ ai_hype_tracker/
 | Staging | `stg_github_event_data` | Implemented — cleans raw events, casts types, filters null IDs |
 | Intermediate | `int_ai_repo_names` | Implemented — identifies AI repos via keywords + curated list |
 | Intermediate | `int_ai_events` | Implemented — joins `stg_github_event_data` × `int_ai_repo_names` (all event types) |
+| Intermediate | `int_push_events` | Implemented — filters `stg_github_event_data` for PushEvent only |
 | Marts | `dim_ai_repos` | Implemented — distinct AI repo names from `int_ai_repo_names` |
 | Marts | `fct_ai_repo_events` | Implemented — incremental fact table from `int_ai_events` |
-| Reporting | `fct_daily_ai_repo_events` | Implemented — daily aggregation by repo + event type |
+| Reporting | `fct_daily_ai_repo_events` | Implemented — incremental daily aggregation by repo + event type with month/year extraction |
 
 ### dbt DAG
 
 ```text
 stg_github_event_data ─→ int_ai_events ─→ fct_ai_repo_events ─→ fct_daily_ai_repo_events
-                       └→ int_ai_repo_names ┘   dim_ai_repos ←┘
+                       ├→ int_ai_repo_names ┘   dim_ai_repos ←┘
+                       └→ int_push_events
 ```
 
 ## AI Repo Identification (done in dbt, NOT in Airflow)

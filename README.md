@@ -1,12 +1,10 @@
-# GitHub AI Hype Tracker — Project Plan
+# GitHub AI Hype Tracker
 
 ## Project Summary
 
-This project is a batch data pipeline that tracks and analyzes the growth of AI-related repository star activity on GitHub over the last 12 months (March 2025 – March 2026). The goal is to measure AI hype quantitatively by treating GitHub stars as a proxy for developer attention and interest.
+Batch data pipeline that tracks all GitHub event activity on AI repositories over 12 months (March 2025 – March 2026). Captures stars, pushes, pull requests, issues, and all other event types to measure developer engagement.
 
-The pipeline ingests hourly event data from [GitHub Archive](https://www.gharchive.org), filters for AI-related repositories using a combination of keyword matching and a curated list of known AI projects, and produces a month-over-month dashboard showing how star activity has evolved across the AI ecosystem.
-
-**Analytical Question:** How has AI repository star activity grown month-over-month in the last 12 months?
+**Analytical Question:** How has AI repository activity grown month-over-month in the last 12 months?
 
 ---
 
@@ -14,25 +12,57 @@ The pipeline ingests hourly event data from [GitHub Archive](https://www.gharchi
 
 | Layer | Tool | Notes |
 |---|---|---|
-| Orchestration | Apache Airflow | Self-hosted on a GCE VM |
-| Data Lake | Google Cloud Storage (GCS) | Raw JSON + processed Parquet |
-| Warehouse | BigQuery | Partitioned by date, clustered by repo |
+| Orchestration | Apache Airflow 2.9.3 | Self-hosted on GCE VM |
+| Data Lake | Google Cloud Storage | Raw JSON + processed Parquet |
+| Warehouse | BigQuery | Partitioned by `created_at`, clustered by `event_type` + `repo_name` |
 | Transformation | dbt | Business logic, filtering, modeling |
 | Dashboard | Looker Studio | Native BigQuery connector |
-| Cloud Provider | GCP | |
+| Cloud Provider | GCP | Region: `europe-west4` |
+
+---
+
+## Architecture Overview
+
+```text
+GitHub Archive (gharchive.org)
+        │
+        ▼
+Airflow DAG (GCE VM)
+  - Downloads 24 hourly JSON files per day
+  - Flattens JSON to tabular format
+  - Outputs per-hour Parquet files
+        │
+        ▼
+GCS (Data Lake)
+  - /raw/        → original .json.gz files
+  - /processed/  → flattened Parquet files
+        │
+        ▼
+BigQuery (Data Warehouse)
+  - raw_github_events table (all event types)
+  - Partitioned by created_at, clustered by event_type + repo_name
+        │
+        ▼
+dbt (Transformations)
+  - Staging: cleans and casts raw events
+  - Intermediate: identifies AI repos (keywords + curated list), joins events
+  - Marts: incremental fact tables, daily aggregations with month/year extraction
+        │
+        ▼
+Looker Studio (Dashboard)
+  - MoM activity growth across AI repos
+  - Breakdown by event type (stars, pushes, PRs, issues)
+  - Top repos by activity volume
+```
 
 ---
 
 ## Repository Identification Strategy
 
-AI repositories are identified using two complementary approaches applied in dbt:
+AI repositories are identified exclusively in dbt (not in Airflow). Airflow ingests all events raw.
 
 ### Curated List (anchor repos — always included)
-- `openclaw/openclaw`
-- `qwibitai/nanoclaw`
-- `sipeed/picoclaw`
-- `HKUDS/nanobot`
-- `nearai/ironclaw`
+
 - `huggingface/transformers`
 - `langchain-ai/langchain`
 - `openai/openai-python`
@@ -41,49 +71,13 @@ AI repositories are identified using two complementary approaches applied in dbt
 - `tensorflow/tensorflow`
 - `microsoft/autogen`
 - `ggerganov/llama.cpp`
-- `comfyanonymous/ComfyUI`
+- `comfyanonymous/comfyui`
 - `nomic-ai/gpt4all`
 
 ### Keyword Filter (applied to repo name)
+
 Repos whose name contains any of the following terms are included:
 `llm`, `gpt`, `ai`, `ml`, `neural`, `diffusion`, `langchain`, `ollama`, `embedding`, `transformer`
-
-> **Note:** Filtering happens exclusively in dbt. Airflow ingests all `WatchEvent` (star) data raw — no business logic at ingestion time.
-
----
-
-## Architecture Overview
-
-```
-GitHub Archive (gharchive.org)
-        │
-        ▼
-Airflow DAG (GCE VM)
-  - Downloads hourly JSON files
-  - Flattens JSON to tabular format using Python
-  - Outputs Parquet files
-        │
-        ▼
-GCS (Data Lake)
-  - /raw/        → original JSON files
-  - /processed/  → flattened Parquet files
-        │
-        ▼
-BigQuery (Data Warehouse)
-  - Raw events table (partitioned by date, clustered by event_type + repo_name)
-        │
-        ▼
-dbt (Transformations)
-  - Filters for WatchEvent (stars) only
-  - Applies AI repo identification (curated list + keyword filter)
-  - Builds month-over-month aggregation models
-        │
-        ▼
-Looker Studio (Dashboard)
-  - MoM star growth chart
-  - Top AI repos by star velocity
-  - Curated vs keyword-matched repo breakdown
-```
 
 ---
 
@@ -91,110 +85,79 @@ Looker Studio (Dashboard)
 
 ### Ingestion (Airflow DAG)
 
-- **Schedule:** Daily batch (processes prior day's hourly files)
+- **DAG ID:** `github_ingestion_daily_append`
+- **Schedule:** `0 2 * * *` (daily at 2 AM UTC) with `catchup=True` (backfills from 2025-03-01)
 - **Source:** `https://data.gharchive.org/YYYY-MM-DD-H.json.gz` (24 files per day)
-- **Event type filter:** Ingest all events initially; filter in dbt
-- **Output format:** Parquet (columnar, efficient for BigQuery loading)
+- **Tasks:**
+  1. `ingest_day` — downloads hourly files, flattens JSON, uploads raw `.json.gz` + per-hour `.parquet` to GCS
+  2. `load_to_bigquery` — loads Parquet files from GCS into BigQuery with `WRITE_APPEND`
 - **Landing zones:**
-  - Raw JSON → `gs://<bucket>/raw/YYYY/MM/DD/`
-  - Processed Parquet → `gs://<bucket>/processed/YYYY/MM/DD/`
+  - Raw JSON: `gs://ai_hype_tracker_bucket/raw/YYYY/MM/DD/`
+  - Processed Parquet: `gs://ai_hype_tracker_bucket/processed/YYYY/MM/DD/`
 
 ### BigQuery Schema (raw events table)
 
 | Column | Type | Description |
 |---|---|---|
 | `event_id` | STRING | Unique event identifier |
-| `event_type` | STRING | e.g. WatchEvent, PushEvent |
+| `event_type` | STRING | e.g. WatchEvent, PushEvent, IssuesEvent |
 | `actor_login` | STRING | GitHub username |
 | `repo_name` | STRING | org/repo format |
-| `created_at` | TIMESTAMP | Event timestamp |
+| `created_at` | TIMESTAMP | Event timestamp (partition key) |
 | `ingested_at` | TIMESTAMP | Pipeline ingestion timestamp |
-
-**Partitioning:** `created_at` (daily)
-**Clustering:** `event_type`, `repo_name`
 
 ### dbt Models
 
-```
+```text
 models/
 ├── staging/
-│   └── stg_github_events.sql        # Cleans raw events, casts types
+│   └── stg_github_event_data.sql        # Cleans raw events, casts types, filters null IDs
 ├── intermediate/
-│   ├── int_star_events.sql           # Filters WatchEvent only
-│   └── int_ai_repos.sql              # Applies AI repo identification logic
+│   ├── int_ai_repo_names.sql            # AI repo identification (keywords + curated list)
+│   ├── int_ai_events.sql                # Joins stg events × AI repo names (all event types)
+│   └── int_push_events.sql              # Filters stg events for PushEvent only
 └── marts/
-    ├── fct_ai_repo_stars.sql         # Fact table: one row per star event on AI repo
-    └── agg_stars_by_month.sql        # MoM aggregation for dashboard
+    ├── dim_ai_repos.sql                 # Distinct AI repo names
+    ├── fct_ai_repo_events.sql           # Incremental fact table of all AI repo events
+    └── reporting/
+        └── fct_daily_ai_repo_events.sql # Daily aggregation by repo + event type (with month/year)
 ```
 
-### Dashboard (Looker Studio)
+**dbt DAG:**
 
-Key charts:
-- **MoM star growth (line chart):** Total AI repo stars per month over 12 months
-- **Top repos by star velocity (bar chart):** Which repos gained the most stars MoM
-- **Curated vs discovered repos (pie/stacked):** Stars from curated list vs keyword-matched repos
-- **Emerging repos (table):** Repos not in curated list that appear via keyword filter, ranked by stars
+```text
+stg_github_event_data ─→ int_ai_events ─→ fct_ai_repo_events ─→ fct_daily_ai_repo_events
+                       ├→ int_ai_repo_names ┘   dim_ai_repos ←┘
+                       └→ int_push_events
+```
+
+**Materializations:** staging → view, intermediate → view, marts → table (reporting uses incremental)
+
+---
+
+## Infrastructure
+
+- **GCP Project:** `ai-hype-tracker`
+- **GCE VM:** `airflow-vm`, `e2-medium`, zone `europe-west4-a`, Ubuntu 22.04 LTS
+- **Airflow:** installed in virtualenv at `/opt/airflow` on the VM
+- **Terraform:** provisions GCS bucket, BigQuery dataset, GCE VM, firewall rule (SSH via IAP only)
+- **GCS lifecycle:** abort incomplete multipart uploads after 1 day
+
+---
+
+## Key Design Decisions
+
+- **No business logic in Airflow** — ingestion is generic; all filtering/classification is in dbt
+- **All event types tracked** — stars, pushes, PRs, issues give a fuller picture of developer engagement
+- **Per-hour Parquet** — write each hour immediately to avoid memory accumulation on the VM
+- **Batch over streaming** — MoM analysis doesn't need real-time; batch is simpler and cheaper
+- **Self-hosted Airflow on GCE** — Cloud Composer is too expensive for a personal project
+- **Always filter on `created_at`** in BigQuery queries to use partitioning and control costs
 
 ---
 
 ## Timeframe
 
 - **Start:** March 1, 2025
-- **End:** March 3, 2026 (today)
+- **End:** March 2026
 - **Granularity:** Hourly ingestion, daily batch processing, monthly aggregation for analysis
-
----
-
-## Infrastructure Notes
-
-- **Airflow:** Self-hosted on a small GCE VM (e2-medium or similar). Do NOT use Cloud Composer — too expensive for a personal project.
-- **GCS:** Standard storage class is sufficient. Apply lifecycle rules to delete raw JSON after 30 days to control costs.
-- **BigQuery:** Use partitioned tables to minimize query costs. Always filter on `created_at` partition column in queries.
-- **Terraform:** Use Terraform to provision GCS bucket, BigQuery dataset, and GCE VM for reproducibility.
-
----
-
-## Project Phases
-
-### Phase 1 — Infrastructure Setup
-- [ ] Provision GCP resources with Terraform (GCE VM, GCS bucket, BigQuery dataset)
-- [ ] Install and configure Airflow on GCE VM
-- [ ] Set up dbt project connected to BigQuery
-- [ ] Validate connectivity across all layers
-
-### Phase 2 — Ingestion Pipeline
-- [ ] Build Airflow DAG for daily batch ingestion
-- [ ] Implement Python JSON flattening logic
-- [ ] Write Parquet output to GCS
-- [ ] Load Parquet from GCS to BigQuery raw table
-- [ ] Backfill 12 months of historical data (March 2025 – March 2026)
-
-### Phase 3 — Transformations
-- [ ] Build dbt staging model (`stg_github_events`)
-- [ ] Build intermediate models (star filter, AI repo identification)
-- [ ] Build fact table (`fct_ai_repo_stars`)
-- [ ] Build MoM aggregation model (`agg_stars_by_month`)
-- [ ] Add dbt tests (not null, unique, accepted values)
-
-### Phase 4 — Dashboard
-- [ ] Connect Looker Studio to BigQuery
-- [ ] Build MoM growth chart
-- [ ] Build top repos by star velocity chart
-- [ ] Build curated vs discovered breakdown
-- [ ] Build emerging repos table
-
-### Phase 5 — Documentation & Submission
-- [ ] Write README with architecture diagram
-- [ ] Document pipeline design decisions
-- [ ] Record short demo video (if required)
-- [ ] Submit for peer review
-
----
-
-## Key Design Decisions & Rationale
-
-- **Batch over streaming:** MoM analysis does not require real-time data. Batch is simpler, cheaper, and sufficient.
-- **Python for JSON flattening (not Spark):** GitHub Archive JSON is well-structured. Python handles flattening cleanly without the overhead of managing a Spark/Dataproc cluster.
-- **dbt for business logic:** All filtering and repo identification logic lives in dbt, not in Airflow. This keeps ingestion generic and transformations transparent and testable.
-- **Stars as hype proxy:** Stars measure developer attention and interest, not development activity. This is intentional — the project is explicitly tracking hype, not productivity.
-- **Airflow over Kestra:** Chosen because of existing production familiarity, not because it is objectively superior for this use case.

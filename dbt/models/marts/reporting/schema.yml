@@ -6,6 +6,14 @@ models:
         description: "The date (without time) when the events occurred."
         tests:
           - not_null
+      - name: event_month
+        description: "The month (in YYYY-MM format) when the events occurred, used for monthly aggregations."
+        tests:
+          - not_null
+      - name: event_year
+        description: "The year (in YYYY format) when the events occurred, used for yearly aggregations."
+        tests:
+          - not_null
       - name: repo_name
         description: "The name of the AI-related GitHub repository."
         tests:

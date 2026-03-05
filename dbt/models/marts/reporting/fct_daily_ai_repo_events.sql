@@ -8,6 +8,8 @@
 
 select
     date(created_at) as event_date,
+    extract(month from created_at) as event_month,
+    extract(year from created_at) as event_year,
     repo_name,
     event_type,
     count(distinct event_id) as event_count,
@@ -18,4 +20,4 @@ from {{ ref('fct_ai_repo_events') }}
 where date(created_at) > (select max(event_date) from {{ this }})
 {% endif %}
 
-group by event_date, repo_name, event_type
+group by event_date, event_month, event_year, repo_name, event_type
