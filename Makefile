@@ -66,13 +66,18 @@ lint: lint-python lint-sql lint-terraform
 
 ci: lint dbt-build
 
+# ─── Hooks ───────────────────────────────────────────────────────────────────
+setup-hooks:
+	pip3 install pre-commit
+	pre-commit install
+
 # ─── Composite ────────────────────────────────────────────────────────────────
 infra: terraform-init terraform-apply
 
-setup: infra dbt-deps
+setup: infra dbt-deps setup-hooks
 
 .PHONY: terraform-init terraform-plan terraform-apply terraform-destroy \
         dbt-deps dbt-build dbt-run dbt-test dbt-clean dbt-docs \
         ssh deploy-dag deploy-key deploy \
         lint-python lint-sql lint-terraform lint ci \
-        infra setup
+        setup-hooks infra setup

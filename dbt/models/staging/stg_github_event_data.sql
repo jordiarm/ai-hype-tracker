@@ -14,7 +14,8 @@ cleaned as (
         cast(created_at as timestamp) as created_at,
         cast(ingested_at as timestamp) as ingested_at
     from source
-    where event_id is not null
+    where
+        event_id is not null
         and repo_name is not null
 
 )
