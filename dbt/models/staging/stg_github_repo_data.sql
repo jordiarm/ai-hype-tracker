@@ -1,6 +1,6 @@
 with source as (
 
-    select * from {{ source('raw', 'raw_github_repos') }}
+    select * from {{ source('raw', 'raw_github_events') }}
 
 ),
 

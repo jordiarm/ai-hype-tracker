@@ -38,13 +38,11 @@ ai_hype_tracker/
 ├── dbt/
 │   ├── models/
 │   │   ├── staging/
-│   │   │   └── stg_github_events.sql           # Cleans raw events, casts types
-│   │   ├── intermediate/
-│   │   │   ├── int_star_events.sql             # Filters WatchEvent only
-│   │   │   └── int_ai_repos.sql                # AI repo identification logic
-│   │   └── marts/
-│   │       ├── fct_ai_repo_stars.sql           # Fact table: one row per star on AI repo
-│   │       └── agg_stars_by_month.sql          # MoM aggregation for dashboard
+│   │   │   ├── stg_github_repo_data.sql       # Cleans raw events, casts types
+│   │   │   ├── schema.yml                     # Model documentation & tests
+│   │   │   └── sources.yml                    # Source definitions (BigQuery)
+│   │   ├── intermediate/                      # Planned: int_star_events, int_ai_repos
+│   │   └── marts/                             # Planned: fct_ai_repo_stars, agg_stars_by_month
 │   ├── dbt_project.yml
 │   └── dbt_packages.yml
 ├── terraform/
@@ -57,7 +55,7 @@ ai_hype_tracker/
 ## Airflow DAG
 
 - **DAG ID:** `github_ingestion_daily_append`
-- **Schedule:** `@daily` with `catchup=True` (backfills from 2025-03-01)
+- **Schedule:** `0 2 * * *` (2 AM UTC) with `catchup=True` (backfills from 2025-03-01)
 - **Source:** `https://data.gharchive.org/YYYY-MM-DD-H.json.gz` (24 files/day)
 - **Tasks:**
   1. `ingest_day` — downloads 24 hourly files, flattens JSON, uploads raw `.json.gz` + per-hour `.parquet` to GCS
@@ -81,15 +79,27 @@ ai_hype_tracker/
 
 - **Profile:** `ai_hype_tracker`
 - **Materializations:** staging → view, intermediate → view, marts → table
+- **Packages:** `dbt-labs/dbt_utils` 1.3.3
+- **Source:** `raw.raw_github_repos` (defined in `sources.yml`, references BigQuery dataset `ai_hype_tracker`)
 
-## AI Repo Identification (done in dbt, NOT in Airflow)
+### Current dbt model status
 
-Airflow ingests all events raw. Filtering happens exclusively in dbt.
+| Layer | Model | Status |
+| --- | --- | --- |
+| Staging | `stg_github_repo_data` | Implemented — cleans raw events, casts types, filters null IDs |
+| Intermediate | `int_star_events` | Not yet implemented |
+| Intermediate | `int_ai_repos` | Not yet implemented |
+| Marts | `fct_ai_repo_stars` | Not yet implemented |
+| Marts | `agg_stars_by_month` | Not yet implemented |
 
-**Keyword filter** (applied to `repo_name`):
+## AI Repo Identification (planned for dbt, NOT in Airflow)
+
+Airflow ingests all events raw. Filtering will happen exclusively in dbt intermediate/marts layers (not yet implemented).
+
+**Keyword filter** (to be applied to `repo_name`):
 `llm`, `gpt`, `ai`, `ml`, `neural`, `diffusion`, `langchain`, `ollama`, `embedding`, `transformer`
 
-**Curated list** (always included):
+**Curated list** (to be always included):
 `huggingface/transformers`, `langchain-ai/langchain`, `openai/openai-python`, `ollama/ollama`, `pytorch/pytorch`, `tensorflow/tensorflow`, `microsoft/autogen`, `ggerganov/llama.cpp`, `comfyanonymous/ComfyUI`, `nomic-ai/gpt4all`, plus several others.
 
 ## Key Design Decisions
@@ -103,7 +113,7 @@ Airflow ingests all events raw. Filtering happens exclusively in dbt.
 
 ## Infrastructure Notes
 
-- GCS lifecycle rule: delete raw JSON after 30 days (cost control)
+- GCS lifecycle rule: abort incomplete multipart uploads after 1 day
 - Terraform provisions: GCS bucket, BigQuery dataset, GCE VM, firewall rule (SSH via IAP only)
 - Firewall allows SSH only from IAP CIDR `35.235.240.0/20`
 - Airflow installed in virtualenv at `/opt/airflow` on the VM

@@ -4,8 +4,8 @@ sources:
     database: env_var('GCP_PROJECT_ID', 'ai-hype-tracker')
     schema: ai_hype_tracker
     tables:
-      - name: raw_github_repos
-        description: "GitHub repositories related to AI, sourced from the BigQuery public datasets."
+      - name: raw_github_events
+        description: "Raw GitHub events data from the BigQuery dataset `raw_github_events`."
         columns:
           - name: event_id
             description: "A unique identifier for each GitHub event."
