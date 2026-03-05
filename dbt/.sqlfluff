@@ -3,6 +3,7 @@ templater = jinja
 dialect = bigquery
 max_line_length = 120
 large_file_skip_byte_limit = 0
+exclude_rules = ST06, RF02
 
 [sqlfluff:indentation]
 indent_unit = space
@@ -13,9 +14,3 @@ capitalisation_policy = lower
 
 [sqlfluff:rules:capitalisation.functions]
 extended_capitalisation_policy = lower
-
-[sqlfluff:rules:structure.column_order]
-enabled = false
-
-[sqlfluff:rules:references.qualification]
-enabled = false
