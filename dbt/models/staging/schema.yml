@@ -1,0 +1,16 @@
+models:
+  - name: stg_github_repo_data
+    description: "Staging model for GitHub events related to AI repositories."
+    columns:
+      - name: event_id
+        description: "A unique identifier for each GitHub event."
+      - name: event_type
+        description: "The type of GitHub event (e.g., PushEvent, PullRequestEvent)."
+      - name: actor_login
+        description: "The GitHub username of the actor who triggered the event."
+      - name: repo_name
+        description: "The name of the GitHub repository associated with the event."
+      - name: created_at
+        description: "The timestamp when the GitHub event was created."
+      - name: ingested_at
+        description: "The timestamp when the data was ingested into the staging layer."

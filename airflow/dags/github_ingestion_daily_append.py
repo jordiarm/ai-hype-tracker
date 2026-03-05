@@ -20,25 +20,11 @@ KEY_PATH = "/home/jordiarmentia/airflow/keys/airflow_service_account.json"
 
 
 
-def _flatten_events(raw: list[dict]) -> list[dict]:
-    ingested_at = datetime.now(timezone.utc).isoformat()
-    rows = []
-    for event in raw:
-        rows.append({
-            "event_id": event.get("id"),
-            "event_type": event.get("type"),
-            "actor_login": (event.get("actor") or {}).get("login"),
-            "repo_name": (event.get("repo") or {}).get("name"),
-            "created_at": event.get("created_at"),
-            "ingested_at": ingested_at,
-        })
-    return rows
-
 
 @dag(
     dag_id="github_ingestion_daily_append",
     start_date=datetime(2025, 3, 1),
-    schedule="@daily",
+    schedule="0 2 * * *",
     catchup=True,
     max_active_runs=1,
     default_args={"retries": 2, "retry_delay": timedelta(minutes=5)},
@@ -71,27 +57,39 @@ def github_archive_ingestion():
             raw_blob = bucket.blob(f"raw/{year}/{month}/{day}/{ds}-{hour}.json.gz")
             raw_blob.upload_from_string(raw_bytes, content_type="application/gzip")
 
-            # Parse and flatten this hour only
-            events = []
+            # Stream line-by-line to avoid holding all events in memory at once
+            ingested_at = datetime.now(timezone.utc).isoformat()
+            rows = []
+            hour_count = 0
             with gzip.open(io.BytesIO(raw_bytes), "rt", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
-                    if line:
-                        try:
-                            events.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            pass
+                    if not line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    rows.append({
+                        "event_id": event.get("id"),
+                        "event_type": event.get("type"),
+                        "actor_login": (event.get("actor") or {}).get("login"),
+                        "repo_name": (event.get("repo") or {}).get("name"),
+                        "created_at": event.get("created_at"),
+                        "ingested_at": ingested_at,
+                    })
+                    hour_count += 1
+            del raw_bytes
 
-            rows = _flatten_events(events)
-            print(f"Hour {hour}: {len(events)} events")
-            total_rows += len(rows)
+            print(f"Hour {hour}: {hour_count} events")
+            total_rows += hour_count
 
             if not rows:
-                del raw_bytes, events, rows
                 continue
 
             # Write this hour's Parquet immediately — do not accumulate
             df = pd.DataFrame(rows)
+            del rows
             df["created_at"] = pd.to_datetime(df["created_at"], utc=True)
             df["ingested_at"] = pd.to_datetime(df["ingested_at"], utc=True)
 
@@ -105,7 +103,7 @@ def github_archive_ingestion():
             finally:
                 os.unlink(tmp_path)
 
-            del df, rows, events, raw_bytes
+            del df
 
         if total_rows == 0:
             print("No rows collected for this day.")

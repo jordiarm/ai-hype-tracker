@@ -1,0 +1,21 @@
+sources:
+  - name: raw
+    description: "Raw data from the BigQuery public datasets"
+    database: env_var('GCP_PROJECT_ID', 'ai-hype-tracker')
+    schema: ai_hype_tracker
+    tables:
+      - name: raw_github_repos
+        description: "GitHub repositories related to AI, sourced from the BigQuery public datasets."
+        columns:
+          - name: event_id
+            description: "A unique identifier for each GitHub event."
+          - name: event_type
+            description: "The type of GitHub event (e.g., PushEvent, PullRequestEvent)."
+          - name: actor_login
+            description: "The GitHub username of the actor who triggered the event."
+          - name: repo_name
+            description: "The name of the GitHub repository associated with the event."
+          - name: created_at
+            description: "The timestamp when the GitHub event was created."
+          - name: ingested_at
+            description: "The timestamp when the data was ingested into the staging layer."
