@@ -3,8 +3,7 @@ repos:
     rev: v0.11.4
     hooks:
       - id: ruff
-        args: [check, airflow/]
-        pass_filenames: false
+        files: ^airflow/
 
   - repo: https://github.com/sqlfluff/sqlfluff
     rev: 3.3.1
