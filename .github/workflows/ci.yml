@@ -91,7 +91,7 @@ jobs:
   deploy-dag:
     name: Deploy DAG
     needs: [python-lint, sql-lint, terraform-validate, dbt-build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
