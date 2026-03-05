@@ -13,7 +13,7 @@ select
     repo_name,
     created_at,
     ingested_at
-from {{ ref('int_ai_star_events') }}
+from {{ ref('int_ai_events') }}
 
 {% if is_incremental() %}
 where ingested_at > (select max(ingested_at) from {{ this }})

@@ -8,23 +8,23 @@ models:
           - unique
           - not_null
   - name: fct_ai_repo_events
-    description: "Fact table containing GitHub events for AI-related repositories, including details about the actor, repository, and timestamps."
+    description: "Fact table containing all GitHub events for AI-related repositories, including details about the actor, repository, and timestamps."
     columns:
       - name: event_id
-        description: "A unique identifier for each GitHub star event."
+        description: "A unique identifier for each GitHub event."
         tests:
           - unique
           - not_null
       - name: actor_login
-        description: "The GitHub username of the actor who starred the repository."
+        description: "The GitHub username of the actor who triggered the event."
         tests:
           - not_null
       - name: repo_name
-        description: "The name of the AI-related GitHub repository that was starred."
+        description: "The name of the AI-related GitHub repository."
         tests:
           - not_null
       - name: created_at
-        description: "The timestamp when the star event was created."
+        description: "The timestamp when the event was created."
         tests:
             - not_null
       - name: ingested_at
@@ -32,6 +32,6 @@ models:
         tests:
           - not_null
       - name: event_type
-        description: "The type of GitHub event (e.g., PushEvent, PullRequestEvent)."
+        description: "The type of GitHub event (e.g., WatchEvent, PushEvent, PullRequestEvent)."
         tests:
           - not_null

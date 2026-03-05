@@ -2,9 +2,9 @@
 
 ## Project Summary
 
-Batch data pipeline that tracks AI repository star activity on GitHub over 12 months (March 2025 – March 2026). GitHub stars are used as a proxy for developer attention/hype.
+Batch data pipeline that tracks all GitHub event activity on AI repositories over 12 months (March 2025 – March 2026). Captures stars, pushes, pull requests, issues, and all other event types to measure developer engagement.
 
-**Analytical question:** How has AI repository star activity grown month-over-month in the last 12 months?
+**Analytical question:** How has AI repository activity grown month-over-month in the last 12 months?
 
 ## Stack
 
@@ -42,13 +42,12 @@ ai_hype_tracker/
 │   │   │   ├── schema.yml                     # Model documentation & tests
 │   │   │   └── sources.yml                    # Source definitions (BigQuery)
 │   │   ├── intermediate/
-│   │   │   ├── int_star_events.sql            # Filters WatchEvent only
 │   │   │   ├── int_ai_repo_names.sql          # AI repo identification (keywords + curated list)
-│   │   │   ├── int_ai_star_events.sql         # Joins int_star_events × int_ai_repo_names
+│   │   │   ├── int_ai_events.sql              # Joins stg_github_event_data × int_ai_repo_names
 │   │   │   └── schema.yml                     # Model documentation & tests
 │   │   └── marts/
 │   │       ├── dim_ai_repos.sql               # Distinct AI repo names
-│   │       ├── fct_ai_repo_events.sql         # Incremental fact table of AI star events
+│   │       ├── fct_ai_repo_events.sql         # Incremental fact table of all AI repo events
 │   │       ├── schema.yml                     # Model documentation & tests
 │   │       └── reporting/
 │   │           ├── fct_daily_ai_repo_events.sql  # Daily aggregation by repo + event type
@@ -97,23 +96,22 @@ ai_hype_tracker/
 | Layer | Model | Status |
 | --- | --- | --- |
 | Staging | `stg_github_event_data` | Implemented — cleans raw events, casts types, filters null IDs |
-| Intermediate | `int_star_events` | Implemented — filters to `WatchEvent` only |
 | Intermediate | `int_ai_repo_names` | Implemented — identifies AI repos via keywords + curated list |
-| Intermediate | `int_ai_star_events` | Implemented — joins `int_star_events` × `int_ai_repo_names` |
+| Intermediate | `int_ai_events` | Implemented — joins `stg_github_event_data` × `int_ai_repo_names` (all event types) |
 | Marts | `dim_ai_repos` | Implemented — distinct AI repo names from `int_ai_repo_names` |
-| Marts | `fct_ai_repo_events` | Implemented — incremental fact table from `int_ai_star_events` |
+| Marts | `fct_ai_repo_events` | Implemented — incremental fact table from `int_ai_events` |
 | Reporting | `fct_daily_ai_repo_events` | Implemented — daily aggregation by repo + event type |
 
 ### dbt DAG
 
 ```text
-stg_github_event_data ─→ int_star_events ────→ int_ai_star_events ─→ fct_ai_repo_events ─→ fct_daily_ai_repo_events
-                       └→ int_ai_repo_names ─┘                      dim_ai_repos ←────────┘
+stg_github_event_data ─→ int_ai_events ─→ fct_ai_repo_events ─→ fct_daily_ai_repo_events
+                       └→ int_ai_repo_names ┘   dim_ai_repos ←┘
 ```
 
 ## AI Repo Identification (done in dbt, NOT in Airflow)
 
-Airflow ingests all events raw. Filtering happens exclusively in dbt intermediate layer (`int_ai_repo_names` + `int_ai_star_events`).
+Airflow ingests all events raw. Filtering happens exclusively in dbt intermediate layer (`int_ai_repo_names` + `int_ai_events`).
 
 **Keyword filter** (applied to `repo_name` in `int_ai_repo_names`):
 `llm`, `gpt`, `ai`, `ml`, `neural`, `diffusion`, `langchain`, `ollama`, `embedding`, `transformer`
@@ -127,7 +125,7 @@ Airflow ingests all events raw. Filtering happens exclusively in dbt intermediat
 - **Per-hour Parquet** — write each hour immediately to avoid memory accumulation on the VM
 - **Batch over streaming** — MoM analysis doesn't need real-time; batch is simpler and cheaper
 - **Self-hosted Airflow on GCE** — Cloud Composer is too expensive for a personal project
-- **Stars (`WatchEvent`) as hype proxy** — measures developer attention, not productivity
+- **All event types tracked** — stars, pushes, PRs, issues, etc. give a fuller picture of developer engagement
 - **Always filter on `created_at`** in BigQuery queries to use partitioning and control costs
 
 ## Infrastructure Notes

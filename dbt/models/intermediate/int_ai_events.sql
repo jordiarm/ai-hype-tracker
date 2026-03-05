@@ -1,6 +1,6 @@
-with star_events as (
+with events as (
 
-    select * from {{ ref('int_star_events') }}
+    select * from {{ ref('stg_github_event_data') }}
 
 ),
 
@@ -17,6 +17,6 @@ select
     e.repo_name,
     e.created_at,
     e.ingested_at
-from star_events e
+from events e
 inner join ai_repo_names r
     on e.repo_name = r.repo_name
