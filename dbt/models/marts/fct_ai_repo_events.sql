@@ -16,5 +16,13 @@ select
 from {{ ref('int_ai_events') }}
 
 {% if is_incremental() %}
-    where ingested_at > (select max(ingested_at) from {{ this }})
+    where created_at > coalesce(
+        date_sub((select max(created_at) from {{ this }}), interval 1 day),
+        timestamp('1970-01-01')
+    )
 {% endif %}
+
+qualify row_number() over (
+    partition by event_id
+    order by created_at
+) = 1

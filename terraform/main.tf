@@ -5,6 +5,11 @@ terraform {
       version = "7.16.0"
     }
   }
+
+  backend "gcs" {
+    bucket = "ai-hype-tracker-tf-state"
+    prefix = "terraform/state"
+  }
 }
 
 provider "google" {
