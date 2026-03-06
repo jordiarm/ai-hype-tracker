@@ -21,3 +21,8 @@ from {{ ref('int_ai_events') }}
         timestamp('1970-01-01')
     )
 {% endif %}
+
+qualify row_number() over (
+    partition by event_id
+    order by created_at
+) = 1
