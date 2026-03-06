@@ -93,6 +93,8 @@ jobs:
     needs: [python-lint, sql-lint, terraform-validate, dbt-build]
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
+    environment:
+      name: production
     steps:
       - uses: actions/checkout@v4
 
