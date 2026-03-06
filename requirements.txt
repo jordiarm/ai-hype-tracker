@@ -1,0 +1,5 @@
+dbt-core==1.11.7
+dbt-bigquery==1.11.1
+pre-commit==4.5.1
+ruff==0.15.5
+sqlfluff==4.0.4
