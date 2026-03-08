@@ -110,6 +110,11 @@ jobs:
 
       - name: Deploy DAG to Airflow VM
         run: |
+          gcloud compute ssh airflow-vm \
+            --zone europe-west4-a \
+            --tunnel-through-iap \
+            --quiet \
+            --command "mkdir -p ~/airflow/dags"
           gcloud compute scp airflow/dags/github_ingestion_daily_append.py \
             airflow-vm:~/airflow/dags/github_ingestion_daily_append.py \
             --zone europe-west4-a \
