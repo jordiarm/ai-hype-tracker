@@ -45,6 +45,7 @@ ssh:
 	gcloud compute ssh $(VM_NAME) $(SCP_FLAGS)
 
 deploy-dag:
+	gcloud compute ssh $(VM_NAME) $(SCP_FLAGS) --command "mkdir -p $(DAG_DEST)"
 	gcloud compute scp $(DAG_SRC) $(VM_NAME):$(DAG_DEST) $(SCP_FLAGS)
 
 deploy-key:
