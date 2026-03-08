@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 @dag(
     dag_id="github_ingestion_daily_append",
-    start_date=datetime(2025, 3, 1),
+    start_date=datetime(2026, 1, 1),
     schedule="0 2 * * *",
     catchup=True,
     max_active_runs=1,
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 def github_archive_ingestion():
 
     @task(execution_timeout=timedelta(minutes=15))
-    def ingest_hour(ds: str, hour: int) -> dict:
+    def ingest_hour(hour: int, ds: str = None) -> dict:
         """Download a single hourly file for `ds`, flatten, upload raw JSON + Parquet to GCS.
 
         Returns a dict with row count and status for downstream validation.
@@ -126,7 +126,7 @@ def github_archive_ingestion():
         return {"hour": hour, "rows": hour_count, "corrupt_lines": corrupt_lines}
 
     @task(execution_timeout=timedelta(minutes=30))
-    def load_to_bigquery(ds: str, ingest_results: list[dict]):
+    def load_to_bigquery(ingest_results: list[dict], ds: str):
         """Load the day's Parquet from GCS into BigQuery.
 
         Uses WRITE_TRUNCATE to ensure idempotent loads — safe to retry
@@ -184,7 +184,7 @@ def github_archive_ingestion():
 
     hours = list(range(HOURS_PER_DAY))
     ingest_results = ingest_hour.expand(hour=hours)
-    load_to_bigquery(ds="{{ ds }}", ingest_results=ingest_results)
+    load_to_bigquery(ingest_results=ingest_results)
 
 
 github_archive_ingestion()

@@ -73,11 +73,11 @@ ai_hype_tracker/
 ## Airflow DAG
 
 - **DAG ID:** `github_ingestion_daily_append`
-- **Schedule:** `0 2 * * *` (2 AM UTC) with `catchup=True` (backfills from 2025-03-01)
+- **Schedule:** `0 2 * * *` (2 AM UTC) with `catchup=True` (backfills from 2026-01-01)
 - **Source:** `https://data.gharchive.org/YYYY-MM-DD-H.json.gz` (24 files/day)
 - **Tasks:**
-  1. `ingest_day` — downloads 24 hourly files, flattens JSON, uploads raw `.json.gz` + per-hour `.parquet` to GCS
-  2. `load_to_bigquery` — loads day's Parquet files from GCS into BigQuery with `WRITE_APPEND`
+  1. `ingest_hour(hour, ds)` — (mapped × 24 via `task.expand()`) downloads a single hourly file, flattens JSON, uploads raw `.json.gz` + `.parquet` to GCS. Returns `{"hour", "rows", "corrupt_lines"}` via XCom. Note: `hour` must come before `ds` in the signature because Airflow injects context params (like `ds`) with defaults, and non-default args cannot follow default args.
+  2. `load_to_bigquery` — validates ingest results, deletes existing data for the day, then loads Parquet from GCS into BigQuery (idempotent delete-then-append)
 - **GCS paths:**
   - Raw JSON: `gs://ai_hype_tracker_bucket/raw/YYYY/MM/DD/{ds}-{H}.json.gz`
   - Processed Parquet: `gs://ai_hype_tracker_bucket/processed/YYYY/MM/DD/events-{HH}.parquet`
@@ -109,8 +109,8 @@ ai_hype_tracker/
 | Intermediate | `int_ai_events` | Implemented — joins `stg_github_event_data` × `int_ai_repo_names` (all event types) |
 | Intermediate | `int_push_events` | Implemented — filters `stg_github_event_data` for PushEvent only |
 | Marts | `dim_ai_repos` | Implemented — distinct AI repo names from `int_ai_repo_names` |
-| Marts | `fct_ai_repo_events` | Implemented — incremental fact table from `int_ai_events` |
-| Reporting | `fct_daily_ai_repo_events` | Implemented — incremental daily aggregation by repo + event type with month/year extraction |
+| Marts | `fct_ai_repo_events` | Implemented — incremental fact table from `int_ai_events`, deduped via `qualify row_number()`, uses `created_at` with 1-day lookback |
+| Reporting | `fct_daily_ai_repo_events` | Implemented — incremental daily aggregation by repo + event type with month/year extraction, 1-day lookback window |
 
 ### dbt DAG
 
@@ -133,7 +133,9 @@ Airflow ingests all events raw. Filtering happens exclusively in dbt intermediat
 ## Key Design Decisions
 
 - **No business logic in Airflow** — ingestion is generic; all filtering/classification is in dbt
-- **Per-hour Parquet** — write each hour immediately to avoid memory accumulation on the VM
+- **Per-hour task granularity** — each hour is an independent Airflow task via `task.expand()`; individual retries, better observability
+- **Idempotent BigQuery loads** — delete-then-append per partition day; safe to retry without duplicates
+- **Deduplication in dbt** — `fct_ai_repo_events` uses `qualify row_number() over (partition by event_id)` to handle upstream duplicates
 - **Batch over streaming** — MoM analysis doesn't need real-time; batch is simpler and cheaper
 - **Self-hosted Airflow on GCE** — Cloud Composer is too expensive for a personal project
 - **All event types tracked** — stars, pushes, PRs, issues, etc. give a fuller picture of developer engagement
@@ -148,6 +150,7 @@ Workflow at `.github/workflows/ci.yml`, triggered on push and PR to `main`.
 2. **sql-lint** — `sqlfluff lint` on dbt models (BigQuery dialect)
 3. **terraform-validate** — `terraform fmt -check` + `terraform validate`
 4. **dbt-build-test** — `dbt deps` + `dbt build` against BigQuery (uses `ci` target)
+5. **deploy-dag** — deploys DAG to Airflow VM (only on push to `main`, requires `production` environment approval)
 
 **Required secret:** `GCP_SA_KEY` — base64-encoded GCP service account JSON key
 
@@ -195,5 +198,6 @@ Config at `dbt/.sqlfluff`:
 
 - GCS lifecycle rule: abort incomplete multipart uploads after 1 day
 - Terraform provisions: GCS bucket, BigQuery dataset, GCE VM, firewall rule (SSH via IAP only)
+- Terraform remote state stored in GCS bucket `ai-hype-tracker-tf-state`
 - Firewall allows SSH only from IAP CIDR `35.235.240.0/20`
 - Airflow installed in virtualenv at `/opt/airflow` on the VM
