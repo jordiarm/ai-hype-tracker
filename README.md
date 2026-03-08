@@ -88,11 +88,11 @@ Repos whose name contains any of the following terms are included:
 ### Ingestion (Airflow DAG)
 
 - **DAG ID:** `github_ingestion_daily_append`
-- **Schedule:** `0 2 * * *` (daily at 2 AM UTC) with `catchup=True` (backfills from 2025-03-01)
+- **Schedule:** `0 2 * * *` (daily at 2 AM UTC) with `catchup=True` (backfills from 2026-01-01)
 - **Source:** `https://data.gharchive.org/YYYY-MM-DD-H.json.gz` (24 files per day)
 - **Tasks:**
-  1. `ingest_day` — downloads hourly files, flattens JSON, uploads raw `.json.gz` + per-hour `.parquet` to GCS
-  2. `load_to_bigquery` — loads Parquet files from GCS into BigQuery with `WRITE_APPEND`
+  1. `ingest_hour` — (mapped × 24) downloads a single hourly file, flattens JSON, uploads raw `.json.gz` + `.parquet` to GCS
+  2. `load_to_bigquery` — deletes existing data for the day, then loads Parquet files from GCS into BigQuery (idempotent)
 - **Landing zones:**
   - Raw JSON: `gs://ai_hype_tracker_bucket/raw/YYYY/MM/DD/`
   - Processed Parquet: `gs://ai_hype_tracker_bucket/processed/YYYY/MM/DD/`
@@ -142,7 +142,7 @@ stg_github_event_data ─→ int_ai_events ─→ fct_ai_repo_events ─→ fct_
 - **GCP Project:** `ai-hype-tracker`
 - **GCE VM:** `airflow-vm`, `e2-medium`, zone `europe-west4-a`, Ubuntu 22.04 LTS
 - **Airflow:** installed in virtualenv at `/opt/airflow` on the VM
-- **Terraform:** provisions GCS bucket, BigQuery dataset, GCE VM, firewall rule (SSH via IAP only)
+- **Terraform:** provisions GCS bucket, BigQuery dataset, GCE VM, firewall rule (SSH via IAP only); remote state stored in GCS (`ai-hype-tracker-tf-state`)
 - **GCS lifecycle:** abort incomplete multipart uploads after 1 day
 
 ---
@@ -151,7 +151,9 @@ stg_github_event_data ─→ int_ai_events ─→ fct_ai_repo_events ─→ fct_
 
 - **No business logic in Airflow** — ingestion is generic; all filtering/classification is in dbt
 - **All event types tracked** — stars, pushes, PRs, issues give a fuller picture of developer engagement
-- **Per-hour Parquet** — write each hour immediately to avoid memory accumulation on the VM
+- **Per-hour task granularity** — each hour is an independent Airflow task; one failure doesn't waste the other 23
+- **Idempotent loads** — BigQuery loads delete-then-append per day, safe to retry without duplicates
+- **Deduplication in dbt** — `fct_ai_repo_events` uses `qualify row_number()` to handle upstream duplicates
 - **Batch over streaming** — MoM analysis doesn't need real-time; batch is simpler and cheaper
 - **Self-hosted Airflow on GCE** — Cloud Composer is too expensive for a personal project
 - **Always filter on `created_at`** in BigQuery queries to use partitioning and control costs
@@ -279,7 +281,7 @@ airflow webserver -p 8080 &
 airflow scheduler &
 ```
 
-The DAG `github_ingestion_daily_append` will appear in the Airflow UI. It backfills automatically from 2025-03-01 once unpaused.
+The DAG `github_ingestion_daily_append` will appear in the Airflow UI. It backfills automatically from 2026-01-01 once unpaused.
 
 ### 4. Run dbt Transformations
 
@@ -359,6 +361,7 @@ A GitHub Actions workflow ([.github/workflows/ci.yml](.github/workflows/ci.yml))
 | **SQL Lint** | Lints dbt models with [sqlfluff](https://sqlfluff.com/) (BigQuery dialect) |
 | **Terraform Validate** | Runs `terraform fmt -check` and `terraform validate` |
 | **dbt Build & Test** | Installs dbt packages, runs all models and tests against BigQuery |
+| **Deploy DAG** | Deploys DAG to Airflow VM (requires `production` environment approval) |
 
 ### Setup: Add GCP credentials as a GitHub secret
 

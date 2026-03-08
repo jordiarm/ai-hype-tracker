@@ -3,7 +3,7 @@ GCP_PROJECT  := ai-hype-tracker
 GCP_ZONE     := europe-west4-a
 VM_NAME      := airflow-vm
 DAG_SRC      := airflow/dags/github_ingestion_daily_append.py
-DAG_DEST     := /opt/airflow/dags/
+DAG_DEST     := ~/airflow/dags/
 KEY_SRC      := airflow_service_account.json
 KEY_DEST     := ~/airflow/keys/airflow_service_account.json
 SCP_FLAGS    := --zone $(GCP_ZONE) --tunnel-through-iap
@@ -52,6 +52,9 @@ deploy-key:
 
 deploy: deploy-dag deploy-key
 
+airflow-ui:
+	gcloud compute ssh $(VM_NAME) $(SCP_FLAGS) -- -L 8080:localhost:8080
+
 # ─── CI / Linting ─────────────────────────────────────────────────────────────
 lint-python:
 	ruff check airflow/
@@ -77,6 +80,6 @@ setup: infra dbt-deps setup-hooks
 
 .PHONY: terraform-init terraform-plan terraform-apply terraform-destroy \
         dbt-deps dbt-build dbt-run dbt-test dbt-clean dbt-docs \
-        ssh deploy-dag deploy-key deploy \
+        ssh deploy-dag deploy-key deploy airflow-ui \
         lint-python lint-sql lint-terraform lint ci \
         setup-hooks infra setup
